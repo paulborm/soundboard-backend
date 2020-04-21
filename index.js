@@ -7,6 +7,7 @@ const socketio = require("socket.io");
 const app = express();
 const server = http.createServer(app);
 const io = socketio(server);
+const { v4: uuidv4 } = require("uuid");
 const PORT = process.env.PORT || "3001";
 
 app.use(cors());
@@ -18,46 +19,108 @@ app.use("/static", express.static(path.join(__dirname, "public")));
 app.use("/api", require("./routes/api"));
 app.use("/", require("./routes/index"));
 
+class User {
+  constructor(id, name) {
+    this.id = id;
+    this.name = name || `anonymous`;
+  }
+}
+
 let state = {
-  users: []
+  get numUsers() {
+    return this.users.length;
+  },
+  users: [],
 };
 
-io.on("connection", socket => {
+io.on("connection", (socket) => {
+  let isUserAdded = false;
+
   console.log(`[EVENT: connection]: ${socket.id}`);
 
-  state = {
-    ...state,
-    users: [...state.users, socket.id]
-  };
+  socket.on("add user", ({ name }) => {
+    if (isUserAdded) {
+      return;
+    }
 
-  io.emit("user", { amount: state.users.length });
+    console.log("[add user]");
 
-  socket.on("sound", data => {
+    state.users = [...state.users, new User(socket.id, name)];
+
+    isUserAdded = true;
+
+    console.log(state.users);
+
+    // Send data to the new user.
+    socket.emit("user login", {
+      numUsers: state.numUsers,
+      users: state.users,
+      user: state.users.filter(({ id }) => id === socket.id)[0],
+    });
+
+    // Send data to all clients expect the current one.
+    socket.broadcast.emit("user joined", {
+      numUsers: state.numUsers,
+      users: state.users,
+      user: state.users.filter(({ id }) => id === socket.id)[0],
+    });
+  });
+
+  socket.on("sound", (data) => {
     console.log("[EVENT: sound]", data.sound.name);
-    socket.broadcast.emit("sound", { ...data.sound });
+    socket.broadcast.emit("sound", { sound: data.sound, user: data.user });
+  });
 
-    // Not currently needed. Save for later.
-    // Streaming an audio file in chunks to the client.
-    //
-    // const sound = sounds.filter(({ id }) => id === data.soundId)[0];
-    // const audioReadStream = fs.createReadStream(sound.path, {
-    //   encoding: "binary",
-    //   highWaterMark: 128 * 1024
-    // });
-    // audioReadStream.on("data", function(chunk) {
-    //   console.log(`Streaming sound: ${data.soundId}`);
-    //   socket.broadcast.emit("sound", { chunk });
+  // Listen for events FROM the client.
+  // socket.on("new user", () => {});
+  // socket.on("update user", () => {});
+  // socket.on("play sound", () => {});
+
+  socket.on("update user", (data) => {
+    if (
+      !data.username ||
+      data.username.length <= 0 ||
+      data.username.length > 46 ||
+      typeof data.username !== "string"
+    ) {
+      return;
+    }
+    state.users = state.users.filter((user) => {
+      if (user.id === data.id) {
+        user.name = data.username;
+      }
+      return true;
+    });
+    console.log(
+      "[update user]",
+      state.users.filter(({ id }) => id === data.id)
+    );
+    socket.broadcast.emit("users updated", {
+      users: state.users,
+    });
+    socket.emit("user updated", {
+      user: state.users.filter(({ id }) => id === socket.id)[0],
+    });
+    // socket.broadcast.emit("user updated", {
+    //   users: state.users,
+    //   user: state.users.filter(({ id }) => id === socket.id)[0],
     // });
   });
 
   socket.on("disconnect", () => {
     console.log(`[EVENT: disconnect]: ${socket.id}`);
-    const filteredUsers = state.users.filter(user => user !== socket.id);
-    state = {
-      ...state,
-      users: [...filteredUsers]
-    };
-    io.emit("user", { amount: state.users.length });
+    const filteredUsers = state.users.filter(({ id }) => id !== socket.id);
+
+    userLeft = state.users.filter(({ id }) => id === socket.id)[0];
+    state.users = filteredUsers;
+
+    console.log(state.users);
+
+    socket.broadcast.emit("user left", {
+      numUsers: state.numUsers,
+      users: state.users,
+      user: userLeft,
+    });
   });
 });
 

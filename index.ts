@@ -47,13 +47,6 @@ class User {
   }
 }
 
-const state = {
-  get numUsers() {
-    return this.users.size;
-  },
-  users: new Map(),
-};
-
 const handler = async (request: Request) => {
   const url = new URL(request.url);
   const pathname = url.pathname;
@@ -113,9 +106,15 @@ const handler = async (request: Request) => {
   if (pathname === "/ws") {
     const { socket, response } = Deno.upgradeWebSocket(request);
 
+    const state = {
+      get numUsers() {
+        return this.users.size;
+      },
+      users: new Map(),
+    };
+
     socket.addEventListener("open", (event) => {
       console.log(`[EVENT: connection]:`, socket);
-      console.log(`[>>>>>]:`, Array.from(state.users.values()));
     });
 
     socket.addEventListener("message", (event) => {
@@ -143,6 +142,8 @@ const handler = async (request: Request) => {
             );
           }
         });
+
+        console.log(`[>>>>>]:`, Array.from(state.users.values()));
       }
 
       if (data.type === "sound") {

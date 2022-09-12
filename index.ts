@@ -115,6 +115,7 @@ const handler = async (request: Request) => {
 
     socket.addEventListener("open", (event) => {
       console.log(`[EVENT: connection]:`, socket);
+      console.log(`[>>>>>]:`, state.users);
     });
 
     socket.addEventListener("message", (event) => {

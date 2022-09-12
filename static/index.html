@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Soundboard</title>
+  </head>
+  <body>
+    <h1>Server up and running!</h1>
+
+    <script type="module">
+      const response = await fetch("http://localhost:3001/api/sounds");
+      console.log(await response.json());
+
+      const response2 = await fetch(
+        "http://localhost:3001/api/sounds?id=61w3P9vmsdiBgwd7865dqEoP"
+      );
+      console.log(await response2.json());
+    </script>
+  </body>
+</html>

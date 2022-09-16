@@ -254,6 +254,15 @@ async function handler(request: Request) {
           user.name = username;
           data.user = user;
         }
+
+        state.users.forEach((_, ws) => {
+          ws.send(
+            JSON.stringify({
+              type: "userupdated",
+              user: data.user,
+            }),
+          );
+        });
       }
 
       channelHandler(
@@ -265,6 +274,15 @@ async function handler(request: Request) {
       const user = state.getUser(socket) as User;
 
       state.deleteUser(user);
+
+      state.users.forEach((_, ws) => {
+        ws.send(
+          JSON.stringify({
+            type: "userleft",
+            user: user,
+          }),
+        );
+      });
 
       channelHandler(
         new MessageEvent("close", { data: JSON.stringify({ user }) }),

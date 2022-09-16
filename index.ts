@@ -86,90 +86,15 @@ console.log(`Server listening on port ${port}`);
 await server.serve(Deno.listen({ port }));
 
 function channelHandler(event: any, socket?: WebSocket) {
-  const data = JSON.parse(event?.data || {});
-
-  if (event.target !== channel) {
+  if (event.target !== channel && event.type === "message") {
     channel.postMessage(
-      JSON.stringify({
-        type: event?.data.type || event.type,
-        ...event?.data,
-      }),
+      JSON.stringify(event.data),
     );
   }
 
   if (!socket) return;
 
-  if (data.type === "adduser") {
-    const user = state.addUser(
-      socket,
-      new User(crypto.randomUUID(), data.name),
-    );
-
-    socket.send(
-      JSON.stringify({
-        type: "userlogin",
-        user,
-        users: Array.from(state.users.values()),
-      }),
-    );
-
-    state.users.forEach((_, ws) => {
-      if (ws !== socket) {
-        ws.send(
-          JSON.stringify({
-            type: "userjoined",
-            user,
-          }),
-        );
-      }
-    });
-  }
-
-  if (data.type === "sound") {
-    state.users.forEach((_, ws) => {
-      if (ws !== socket) {
-        ws.send(
-          JSON.stringify({
-            type: "sound",
-            sound: data.sound,
-            user: data.user,
-          }),
-        );
-      }
-    });
-  }
-
-  if (data.type === "updateuser") {
-    const { username } = data;
-
-    if (
-      !username ||
-      username.length <= 0 ||
-      username.length > 46 ||
-      typeof username !== "string"
-    ) {
-      return;
-    }
-
-    const user = state.getUser(socket);
-
-    if (user) {
-      user.name = username;
-
-      state.users.forEach((_, ws) => {
-        if (ws !== socket) {
-          ws.send(
-            JSON.stringify({
-              type: "userupdated",
-              user,
-            }),
-          );
-        }
-      });
-    }
-  }
-
-  if (data.type === "close") {
+  if (event.type === "close") {
     const user = state.getUser(socket);
 
     if (user) {
@@ -185,6 +110,101 @@ function channelHandler(event: any, socket?: WebSocket) {
           );
         }
       });
+    }
+
+    return;
+  }
+
+  const data = JSON.parse(event.data);
+
+  if (event.type === "message") {
+    if (data.type === "adduser") {
+      const user = state.addUser(
+        socket,
+        new User(crypto.randomUUID(), data.name),
+      );
+
+      socket.send(
+        JSON.stringify({
+          type: "userlogin",
+          user,
+          users: Array.from(state.users.values()),
+        }),
+      );
+
+      state.users.forEach((_, ws) => {
+        if (ws !== socket) {
+          ws.send(
+            JSON.stringify({
+              type: "userjoined",
+              user,
+            }),
+          );
+        }
+      });
+    }
+
+    if (data.type === "sound") {
+      state.users.forEach((_, ws) => {
+        if (ws !== socket) {
+          ws.send(
+            JSON.stringify({
+              type: "sound",
+              sound: data.sound,
+              user: data.user,
+            }),
+          );
+        }
+      });
+    }
+
+    if (data.type === "updateuser") {
+      const { username } = data;
+
+      if (
+        !username ||
+        username.length <= 0 ||
+        username.length > 46 ||
+        typeof username !== "string"
+      ) {
+        return;
+      }
+
+      const user = state.getUser(socket);
+
+      if (user) {
+        user.name = username;
+
+        state.users.forEach((_, ws) => {
+          if (ws !== socket) {
+            ws.send(
+              JSON.stringify({
+                type: "userupdated",
+                user,
+              }),
+            );
+          }
+        });
+      }
+    }
+
+    if (event.type === "close") {
+      const user = state.getUser(socket);
+
+      if (user) {
+        state.deleteUser(user);
+
+        state.users.forEach((_, ws) => {
+          if (ws !== socket) {
+            ws.send(
+              JSON.stringify({
+                type: "userleft",
+                user,
+              }),
+            );
+          }
+        });
+      }
     }
   }
 }

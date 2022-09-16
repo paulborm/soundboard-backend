@@ -85,90 +85,91 @@ console.log(`Server listening on port ${port}`);
 
 await server.serve(Deno.listen({ port }));
 
-function channelHandler(event: MessageEvent | CloseEvent, socket?: WebSocket) {
+function channelHandler(event: any, socket?: WebSocket) {
   if (event.target !== channel) {
-    channel.postMessage(event);
+    channel.postMessage(
+      JSON.stringify({
+        type: event?.data.type || event.type,
+        ...event?.data,
+      }),
+    );
   }
 
-  if (event instanceof MessageEvent) {
-    const data = JSON.parse(event.data);
+  const data = JSON.parse(event.data);
 
-    if (!socket) return;
+  if (!socket) return;
 
-    if (data.type === "adduser") {
-      const user = state.addUser(
-        socket,
-        new User(crypto.randomUUID(), data.name),
-      );
+  if (data.type === "adduser") {
+    const user = state.addUser(
+      socket,
+      new User(crypto.randomUUID(), data.name),
+    );
 
-      socket.send(
-        JSON.stringify({
-          type: "userlogin",
-          user,
-          users: Array.from(state.users.values()),
-        }),
-      );
+    socket.send(
+      JSON.stringify({
+        type: "userlogin",
+        user,
+        users: Array.from(state.users.values()),
+      }),
+    );
+
+    state.users.forEach((_, ws) => {
+      if (ws !== socket) {
+        ws.send(
+          JSON.stringify({
+            type: "userjoined",
+            user,
+          }),
+        );
+      }
+    });
+  }
+
+  if (data.type === "sound") {
+    state.users.forEach((_, ws) => {
+      if (ws !== socket) {
+        ws.send(
+          JSON.stringify({
+            type: "sound",
+            sound: data.sound,
+            user: data.user,
+          }),
+        );
+      }
+    });
+  }
+
+  if (data.type === "updateuser") {
+    const { username } = data;
+
+    if (
+      !username ||
+      username.length <= 0 ||
+      username.length > 46 ||
+      typeof username !== "string"
+    ) {
+      return;
+    }
+
+    const user = state.getUser(socket);
+
+    if (user) {
+      user.name = username;
 
       state.users.forEach((_, ws) => {
         if (ws !== socket) {
           ws.send(
             JSON.stringify({
-              type: "userjoined",
+              type: "userupdated",
               user,
             }),
           );
         }
       });
     }
-
-    if (data.type === "sound") {
-      state.users.forEach((_, ws) => {
-        if (ws !== socket) {
-          ws.send(
-            JSON.stringify({
-              type: "sound",
-              sound: data.sound,
-              user: data.user,
-            }),
-          );
-        }
-      });
-    }
-
-    if (data.type === "updateuser") {
-      const { username } = data;
-
-      if (
-        !username ||
-        username.length <= 0 ||
-        username.length > 46 ||
-        typeof username !== "string"
-      ) {
-        return;
-      }
-
-      const user = state.getUser(socket);
-
-      if (user) {
-        user.name = username;
-
-        state.users.forEach((_, ws) => {
-          if (ws !== socket) {
-            ws.send(
-              JSON.stringify({
-                type: "userupdated",
-                user,
-              }),
-            );
-          }
-        });
-      }
-    }
   }
 
-  if (event instanceof CloseEvent) {
-    if (!socket) return;
-
+  if (data.type === "close") {
     const user = state.getUser(socket);
 
     if (user) {

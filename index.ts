@@ -86,6 +86,8 @@ console.log(`Server listening on port ${port}`);
 await server.serve(Deno.listen({ port }));
 
 function channelHandler(event: any, socket?: WebSocket) {
+  const data = JSON.parse(event?.data || {});
+
   if (event.target !== channel) {
     channel.postMessage(
       JSON.stringify({
@@ -94,8 +96,6 @@ function channelHandler(event: any, socket?: WebSocket) {
       }),
     );
   }
-
-  const data = JSON.parse(event.data);
 
   if (!socket) return;
 

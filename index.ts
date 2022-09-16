@@ -262,22 +262,9 @@ async function handler(request: Request) {
     });
 
     socket.addEventListener("close", (event) => {
-      const user = state.getUser(socket);
+      const user = state.getUser(socket) as User;
 
-      if (user) {
-        state.deleteUser(user);
-
-        state.users.forEach((_, ws) => {
-          if (ws !== socket) {
-            ws.send(
-              JSON.stringify({
-                type: "userleft",
-                user,
-              }),
-            );
-          }
-        });
-      }
+      state.deleteUser(user);
 
       channelHandler(
         new MessageEvent("close", { data: JSON.stringify({ user }) }),

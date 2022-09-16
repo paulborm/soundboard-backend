@@ -47,7 +47,148 @@ class User {
   }
 }
 
-const handler = async (request: Request) => {
+class Store {
+  #users = new Map<WebSocket, User>();
+
+  get users() {
+    return this.#users;
+  }
+
+  getUser(key: WebSocket) {
+    return this.#users.get(key);
+  }
+
+  addUser(socket: WebSocket, user: User) {
+    this.#users.set(socket, user);
+    return this.getUser(socket);
+  }
+
+  deleteUser(user: User) {
+    // this.#users.delete(socket);
+    this.#users.forEach(({ id }, ws) => {
+      if (user.id === id) {
+        this.#users.delete(ws);
+      }
+    });
+  }
+}
+
+const state = new Store();
+
+const channel = new BroadcastChannel("ws");
+channel.addEventListener("message", channelHandler);
+
+const server = new Server({ handler });
+const port = Number(Deno.env.get("PORT")) || 3001;
+
+console.log(`Server listening on port ${port}`);
+
+await server.serve(Deno.listen({ port }));
+
+function channelHandler(event: MessageEvent | CloseEvent, socket?: WebSocket) {
+  if (event.target !== channel) {
+    channel.postMessage(event);
+  }
+
+  if (event instanceof MessageEvent) {
+    const data = JSON.parse(event.data);
+
+    if (!socket) return;
+
+    if (data.type === "adduser") {
+      const user = state.addUser(
+        socket,
+        new User(crypto.randomUUID(), data.name),
+      );
+
+      socket.send(
+        JSON.stringify({
+          type: "userlogin",
+          user,
+          users: Array.from(state.users.values()),
+        }),
+      );
+
+      state.users.forEach((_, ws) => {
+        if (ws !== socket) {
+          ws.send(
+            JSON.stringify({
+              type: "userjoined",
+              user,
+            }),
+          );
+        }
+      });
+    }
+
+    if (data.type === "sound") {
+      state.users.forEach((_, ws) => {
+        if (ws !== socket) {
+          ws.send(
+            JSON.stringify({
+              type: "sound",
+              sound: data.sound,
+              user: data.user,
+            }),
+          );
+        }
+      });
+    }
+
+    if (data.type === "updateuser") {
+      const { username } = data;
+
+      if (
+        !username ||
+        username.length <= 0 ||
+        username.length > 46 ||
+        typeof username !== "string"
+      ) {
+        return;
+      }
+
+      const user = state.getUser(socket);
+
+      if (user) {
+        user.name = username;
+
+        state.users.forEach((_, ws) => {
+          if (ws !== socket) {
+            ws.send(
+              JSON.stringify({
+                type: "userupdated",
+                user,
+              }),
+            );
+          }
+        });
+      }
+    }
+  }
+
+  if (event instanceof CloseEvent) {
+    if (!socket) return;
+
+    const user = state.getUser(socket);
+
+    if (user) {
+      state.deleteUser(user);
+
+      state.users.forEach((_, ws) => {
+        if (ws !== socket) {
+          ws.send(
+            JSON.stringify({
+              type: "userleft",
+              user,
+            }),
+          );
+        }
+      });
+    }
+  }
+}
+
+async function handler(request: Request) {
   const url = new URL(request.url);
   const pathname = url.pathname;
 
@@ -106,113 +247,17 @@ const handler = async (request: Request) => {
   if (pathname === "/ws") {
     const { socket, response } = Deno.upgradeWebSocket(request);
 
-    const state = {
-      get numUsers() {
-        return this.users.size;
-      },
-      users: new Map(),
-    };
-
     socket.addEventListener("open", (event) => {
       console.log(`[EVENT: connection]:`, socket);
     });
 
     socket.addEventListener("message", (event) => {
-      const data = JSON.parse(event.data);
-
-      if (data.type === "adduser") {
-        state.users.set(socket, new User(crypto.randomUUID(), data.name));
-
-        socket.send(
-          JSON.stringify({
-            type: "userlogin",
-            users: Array.from(state.users.values()),
-            user: state.users.get(socket),
-          }),
-        );
-
-        state.users.forEach((_, ws) => {
-          if (ws !== socket) {
-            ws.send(
-              JSON.stringify({
-                type: "userjoined",
-                users: Array.from(state.users.values()),
-                user: state.users.get(socket),
-              }),
-            );
-          }
-        });
-
-        console.log(`[>>>>>]:`, Array.from(state.users.values()));
-      }
-
-      if (data.type === "sound") {
-        console.log("[sound]", data.sound);
-        state.users.forEach((_, ws) => {
-          if (ws !== socket) {
-            ws.send(
-              JSON.stringify({
-                type: "sound",
-                sound: data.sound,
-                user: data.user,
-              }),
-            );
-          }
-        });
-      }
-
-      if (data.type === "updateuser") {
-        if (
-          !data.username ||
-          data.username.length <= 0 ||
-          data.username.length > 46 ||
-          typeof data.username !== "string"
-        ) {
-          return;
-        }
-
-        state.users.get(socket).name = data.username;
-
-        console.log(
-          "[update user]",
-          state.users.get(socket),
-        );
-
-        state.users.forEach((_, ws) => {
-          if (ws !== socket) {
-            ws.send(
-              JSON.stringify({
-                type: "usersupdated",
-                users: Array.from(state.users.values()),
-              }),
-            );
-          }
-        });
-
-        socket.send(JSON.stringify({
-          type: "userupdated",
-          user: state.users.get(socket),
-        }));
-      }
+      channelHandler(event, socket);
     });
 
-    socket.addEventListener("close", () => {
+    socket.addEventListener("close", (event) => {
       console.log("[EVENT: disconnect]", socket);
-
-      const userleft = state.users.get(socket);
-      state.users.delete(socket);
-
-      state.users.forEach((_, ws) => {
-        if (ws !== socket) {
-          ws.send(
-            JSON.stringify({
-              type: "userleft",
-              user: userleft,
-              users: Array.from(state.users.values()),
-            }),
-          );
-        }
-      });
+      channelHandler(event, socket);
     });
 
     socket.addEventListener("error", () => {});
@@ -221,11 +266,4 @@ const handler = async (request: Request) => {
   }
 
   return new Response("Nothing found 🥲", { status: 404 });
-};
-
-const server = new Server({ handler });
-const port = Number(Deno.env.get("PORT")) || 3001;
-
-console.log(`Server listening on port ${port}`);
-
-await server.serve(Deno.listen({ port }));
+}

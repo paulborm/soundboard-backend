@@ -114,6 +114,11 @@ function channelHandler(event: MessageEvent) {
     const data = JSON.parse(event.data);
 
     if (data.type === "adduser") {
+      console.log(
+        "channel:message:adduser",
+        data,
+        Object.fromEntries(state.users),
+      );
       state.users.forEach((_, ws) => {
         ws.send(
           JSON.stringify({

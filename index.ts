@@ -85,9 +85,7 @@ console.log(`Server listening on port ${port}`);
 
 await server.serve(Deno.listen({ port }));
 
-function channelHandler(event: any) {
-  console.log("channel:message", event);
-
+function channelHandler(event: MessageEvent) {
   if (event.target !== channel) {
     console.log("channel:message:postmessage", event);
     channel.postMessage(
@@ -98,7 +96,7 @@ function channelHandler(event: any) {
   console.log("channel:message:further", event);
 
   if (event.type === "close") {
-    const data = JSON.parse(event.detail);
+    const data = JSON.parse(event.data);
 
     state.users.forEach((_, ws) => {
       ws.send(
@@ -211,7 +209,6 @@ async function handler(request: Request) {
     const { socket, response } = Deno.upgradeWebSocket(request);
 
     socket.addEventListener("open", (event) => {
-      console.log(`[EVENT: connection]:`, socket);
     });
 
     socket.addEventListener("message", (event) => {
@@ -260,8 +257,6 @@ async function handler(request: Request) {
     });
 
     socket.addEventListener("close", (event) => {
-      console.log("[EVENT: disconnect]", socket);
-
       const user = state.getUser(socket);
 
       if (user) {

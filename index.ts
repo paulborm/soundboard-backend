@@ -124,6 +124,7 @@ function channelHandler(event: MessageEvent) {
           JSON.stringify({
             type: "userjoined",
             user: data.user,
+            users: Array.from(state.users.values()),
           }),
         );
       });

@@ -302,6 +302,11 @@ async function handler(request: Request) {
 
     socket.addEventListener("error", () => {});
 
+    response.headers.append(
+      "access-control-allow-origin",
+      Deno.env.get("CLIENT_URL") || "none",
+    );
+
     return response;
   }
 

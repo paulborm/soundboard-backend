@@ -88,12 +88,18 @@ class Store {
     return this.getUser(socket);
   }
 
-  deleteUser(user: User) {
-    this.#users.forEach(({ id }, ws) => {
-      if (user.id === id) {
-        this.#users.delete(ws);
-      }
-    });
+  deleteUser(key: WebSocket | User) {
+    if (key instanceof WebSocket) {
+      this.#users.delete(key);
+    }
+
+    if (key instanceof User) {
+      this.#users.forEach(({ id }, ws) => {
+        if (key.id === id) {
+          this.#users.delete(ws);
+        }
+      });
+    }
   }
 }
 
@@ -136,11 +142,6 @@ function channelHandler(event: MessageEvent) {
     const data = JSON.parse(event.data);
 
     if (data.type === "adduser") {
-      console.log(
-        "channel:message:adduser",
-        data,
-        Object.fromEntries(store.users),
-      );
       store.users.forEach((_, ws) => {
         ws.send(
           JSON.stringify({
@@ -299,11 +300,13 @@ async function handler(request: Request) {
 
       if (user) {
         store.deleteUser(user);
-
-        channelHandler(
-          new MessageEvent("close", { data: JSON.stringify({ user }) }),
-        );
       }
+
+      console.log("event:close", { user });
+
+      channelHandler(
+        new MessageEvent("close", { data: JSON.stringify({ user }) }),
+      );
     });
 
     socket.addEventListener("error", () => {});

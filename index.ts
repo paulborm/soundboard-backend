@@ -196,10 +196,18 @@ async function handler(request: Request) {
 
   // Serve static files
   if (pathname.startsWith("/static")) {
-    return serveDir(request, {
+    const response = await serveDir(request, {
       fsRoot: "static",
       urlRoot: "static",
+      // enableCors: true,
     });
+
+    response.headers.append(
+      "access-control-allow-origin",
+      Deno.env.get("CLIENT_URL") || "none",
+    );
+
+    return response;
   }
 
   // Routes
@@ -209,11 +217,6 @@ async function handler(request: Request) {
     ).then((response) => response.json()).then((data) =>
       data.map((item: any) => new Sound(item))
     );
-
-    const corsHeaders = new Headers([
-      ["Access-Control-Allow-Origin", Deno.env.get("CLIENT_URL") || "none"],
-      ["Access-Control-Allow-Methods", "GET"],
-    ]);
 
     if (url.searchParams.has("id")) {
       const found = sounds.find((item: any) =>
@@ -225,7 +228,11 @@ async function handler(request: Request) {
           status: 200,
           headers: new Headers([
             ["Content-Type", "application/json"],
-            ...corsHeaders,
+            [
+              "access-control-allow-origin",
+              Deno.env.get("CLIENT_URL") || "none",
+            ],
+            ["Access-Control-Allow-Methods", "GET"],
           ]),
         });
       } else {
@@ -237,7 +244,8 @@ async function handler(request: Request) {
       status: 200,
       headers: new Headers([
         ["Content-Type", "application/json"],
-        ...corsHeaders,
+        ["access-control-allow-origin", Deno.env.get("CLIENT_URL") || "none"],
+        ["Access-Control-Allow-Methods", "GET"],
       ]),
     });
   }

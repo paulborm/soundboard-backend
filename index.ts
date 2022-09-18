@@ -125,9 +125,9 @@ function channelHandler(event: MessageEvent) {
 
   console.log("channel:message:further", event);
 
-  if (event.type === "close") {
-    const data = JSON.parse(event.data);
+  const data = JSON.parse(event.data);
 
+  if (event.type === "close") {
     store.users.forEach((_, ws) => {
       ws.send(
         JSON.stringify({
@@ -139,8 +139,6 @@ function channelHandler(event: MessageEvent) {
   }
 
   if (event.type === "message") {
-    const data = JSON.parse(event.data);
-
     if (data.type === "adduser") {
       store.users.forEach((_, ws) => {
         ws.send(
@@ -200,7 +198,6 @@ async function handler(request: Request) {
     const response = await serveDir(request, {
       fsRoot: "static",
       urlRoot: "static",
-      // enableCors: true,
     });
 
     response.headers.append(

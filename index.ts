@@ -106,8 +106,6 @@ function channelHandler(event: MessageEvent) {
         }),
       );
     });
-
-    return;
   }
 
   if (event.type === "message") {
@@ -143,11 +141,24 @@ function channelHandler(event: MessageEvent) {
     }
 
     if (data.type === "updateuser") {
+      const { username, user } = data;
+
+      if (
+        !username ||
+        username.length <= 0 ||
+        username.length > 46 ||
+        typeof username !== "string"
+      ) {
+        return;
+      }
+
+      const updatedUser = { ...user, name: username };
+
       state.users.forEach((_, ws) => {
         ws.send(
           JSON.stringify({
             type: "userupdated",
-            user: data.user,
+            user: updatedUser,
           }),
         );
       });
@@ -238,32 +249,8 @@ async function handler(request: Request) {
       }
 
       if (data.type === "updateuser") {
-        const { username } = data;
-
-        if (
-          !username ||
-          username.length <= 0 ||
-          username.length > 46 ||
-          typeof username !== "string"
-        ) {
-          return;
-        }
-
         const user = state.getUser(socket);
-
-        if (user) {
-          user.name = username;
-          data.user = user;
-        }
-
-        state.users.forEach((_, ws) => {
-          ws.send(
-            JSON.stringify({
-              type: "userupdated",
-              user: data.user,
-            }),
-          );
-        });
+        data.user = user;
       }
 
       channelHandler(
@@ -275,15 +262,6 @@ async function handler(request: Request) {
       const user = state.getUser(socket) as User;
 
       state.deleteUser(user);
-
-      state.users.forEach((_, ws) => {
-        ws.send(
-          JSON.stringify({
-            type: "userleft",
-            user: user,
-          }),
-        );
-      });
 
       channelHandler(
         new MessageEvent("close", { data: JSON.stringify({ user }) }),

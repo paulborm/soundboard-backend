@@ -10,6 +10,18 @@ await loadEnv({
   allowEmptyValues: true,
 });
 
+type SoundProps = {
+  id: string;
+  name: string;
+  audio: {
+    src: string;
+  };
+  image: {
+    alt: string;
+    src: string;
+  };
+};
+
 class Sound {
   #basePath = "./static";
   id;
@@ -17,7 +29,7 @@ class Sound {
   audio;
   image;
 
-  constructor(props: Record<string, any>) {
+  constructor(props: SoundProps) {
     this.id = props.id;
     this.name = props.name;
     this.audio = {
@@ -38,24 +50,37 @@ class Sound {
 }
 
 class User {
-  id;
-  name;
+  readonly id: string;
+  name: string = "anonymous";
 
-  constructor(id: string, name: string) {
-    this.id = id;
-    this.name = name || `anonymous`;
+  constructor(name?: string) {
+    this.id = crypto.randomUUID();
+
+    if (!!name?.trim()) {
+      this.name = name.trim();
+    }
   }
 }
 
 class Store {
-  #users = new Map<WebSocket, User>();
+  readonly #users: Map<WebSocket, User> = new Map();
 
   get users() {
     return this.#users;
   }
 
-  getUser(key: WebSocket) {
-    return this.#users.get(key);
+  getUser(key: WebSocket | User["id"]) {
+    if (key instanceof WebSocket) {
+      return this.#users.get(key);
+    } else {
+      let user;
+      this.#users.forEach((item, _) => {
+        if (key === item.id) {
+          user = item;
+        }
+      });
+      return user;
+    }
   }
 
   addUser(socket: WebSocket, user: User) {
@@ -64,7 +89,6 @@ class Store {
   }
 
   deleteUser(user: User) {
-    // this.#users.delete(socket);
     this.#users.forEach(({ id }, ws) => {
       if (user.id === id) {
         this.#users.delete(ws);
@@ -73,7 +97,7 @@ class Store {
   }
 }
 
-const state = new Store();
+const store = new Store();
 
 const channel = new BroadcastChannel("ws");
 channel.addEventListener("message", channelHandler);
@@ -98,7 +122,7 @@ function channelHandler(event: MessageEvent) {
   if (event.type === "close") {
     const data = JSON.parse(event.data);
 
-    state.users.forEach((_, ws) => {
+    store.users.forEach((_, ws) => {
       ws.send(
         JSON.stringify({
           type: "userleft",
@@ -115,21 +139,21 @@ function channelHandler(event: MessageEvent) {
       console.log(
         "channel:message:adduser",
         data,
-        Object.fromEntries(state.users),
+        Object.fromEntries(store.users),
       );
-      state.users.forEach((_, ws) => {
+      store.users.forEach((_, ws) => {
         ws.send(
           JSON.stringify({
             type: "userjoined",
             user: data.user,
-            users: Array.from(state.users.values()),
+            users: Array.from(store.users.values()),
           }),
         );
       });
     }
 
     if (data.type === "sound") {
-      state.users.forEach((_, ws) => {
+      store.users.forEach((_, ws) => {
         ws.send(
           JSON.stringify({
             type: "sound",
@@ -154,7 +178,7 @@ function channelHandler(event: MessageEvent) {
 
       const updatedUser = { ...user, name: username };
 
-      state.users.forEach((_, ws) => {
+      store.users.forEach((_, ws) => {
         ws.send(
           JSON.stringify({
             type: "userupdated",
@@ -232,16 +256,16 @@ async function handler(request: Request) {
       const data = JSON.parse(event.data);
 
       if (data.type === "adduser") {
-        const user = state.addUser(
+        const user = store.addUser(
           socket,
-          new User(crypto.randomUUID(), data.name),
+          new User(data.name),
         );
 
         socket.send(
           JSON.stringify({
             type: "userlogin",
             user,
-            users: Array.from(state.users.values()),
+            users: Array.from(store.users.values()),
           }),
         );
 
@@ -249,7 +273,7 @@ async function handler(request: Request) {
       }
 
       if (data.type === "updateuser") {
-        const user = state.getUser(socket);
+        const user = store.getUser(socket);
         data.user = user;
       }
 
@@ -259,9 +283,9 @@ async function handler(request: Request) {
     });
 
     socket.addEventListener("close", (event) => {
-      const user = state.getUser(socket) as User;
+      const user = store.getUser(socket) as User;
 
-      state.deleteUser(user);
+      store.deleteUser(user);
 
       channelHandler(
         new MessageEvent("close", { data: JSON.stringify({ user }) }),

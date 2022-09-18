@@ -255,6 +255,10 @@ async function handler(request: Request) {
   }
 
   if (pathname === "/ws") {
+    if (request.headers.get("Origin") !== Deno.env.get("CLIENT_URL")) {
+      return new Response(null, { status: 400 });
+    }
+
     const { socket, response } = Deno.upgradeWebSocket(request);
 
     socket.addEventListener("open", (event) => {
@@ -293,19 +297,16 @@ async function handler(request: Request) {
     socket.addEventListener("close", (event) => {
       const user = store.getUser(socket) as User;
 
-      store.deleteUser(user);
+      if (user) {
+        store.deleteUser(user);
 
-      channelHandler(
-        new MessageEvent("close", { data: JSON.stringify({ user }) }),
-      );
+        channelHandler(
+          new MessageEvent("close", { data: JSON.stringify({ user }) }),
+        );
+      }
     });
 
     socket.addEventListener("error", () => {});
-
-    response.headers.append(
-      "access-control-allow-origin",
-      Deno.env.get("CLIENT_URL") || "none",
-    );
 
     return response;
   }

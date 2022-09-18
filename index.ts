@@ -116,19 +116,21 @@ console.log(`Server listening on port ${port}`);
 await server.serve(Deno.listen({ port }));
 
 function channelHandler(event: MessageEvent) {
+  console.log("channel:event", event);
+
   if (event.target !== channel) {
-    console.log("channel:message:postmessage", event);
     channel.postMessage(
       JSON.stringify(event.data),
     );
   }
 
-  console.log("channel:message:further", event);
-
   const data = JSON.parse(event.data);
 
   if (event.type === "close") {
-    store.users.forEach((_, ws) => {
+    store.users.forEach((user, ws) => {
+      if (!data.user || user.id === data.user.id) {
+        return;
+      }
       ws.send(
         JSON.stringify({
           type: "userleft",
@@ -260,6 +262,7 @@ async function handler(request: Request) {
     const { socket, response } = Deno.upgradeWebSocket(request);
 
     socket.addEventListener("open", (event) => {
+      console.log("open", event);
     });
 
     socket.addEventListener("message", (event) => {
@@ -270,6 +273,8 @@ async function handler(request: Request) {
           socket,
           new User(data.name),
         );
+
+        console.log("adduser", user);
 
         socket.send(
           JSON.stringify({
@@ -283,6 +288,11 @@ async function handler(request: Request) {
       }
 
       if (data.type === "updateuser") {
+        const user = store.getUser(socket);
+        data.user = user;
+      }
+
+      if (data.type === "sound") {
         const user = store.getUser(socket);
         data.user = user;
       }

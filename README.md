@@ -1,6 +1,6 @@
 # Soundboard-backend
 
-> Real-Time Soundboard
+> ⚠️ Moved to https://github.com/paulborm/soundboard
 
 ## Media files
 
@@ -16,7 +16,7 @@
 
 ### Compression
 
-⚠️ Files must be compressed as much as possible.
+Files must be compressed as much as possible.
 
 **Audio files**
 
